@@ -1,0 +1,5 @@
+Salida esperada con delimitador coma (UTF-8 con BOM, fin de línea CRLF):
+
+id,cliente.nombre,cliente.ciudad,nota,items[0],items[1],activo
+1,José Pérez,Bogotá,"dice ""hola"", ok",a,b,
+2,Ana,,,,,true

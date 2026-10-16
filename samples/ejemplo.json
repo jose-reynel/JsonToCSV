@@ -1,0 +1,4 @@
+[
+  { "id": 1, "cliente": { "nombre": "José Pérez", "ciudad": "Bogotá" }, "nota": "dice \"hola\", ok", "items": ["a", "b"] },
+  { "id": 2, "cliente": { "nombre": "Ana" }, "activo": true }
+]

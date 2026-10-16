@@ -1,0 +1,125 @@
+@page "/"
+@inject ConverterApiClient Api
+@inject IJSRuntime JS
+@using JsonToCsv.Client.Services
+
+<PageTitle>Conversor JSON a CSV</PageTitle>
+
+<div class="container" style="max-width: 700px;">
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Conversor JSON a CSV</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                Seleccione un archivo <code>.json</code> y el delimitador. El CSV resultante (UTF-8 con BOM) abre directamente en Excel, LibreOffice y Google Sheets.
+            </p>
+
+            <div class="mb-3">
+                <label for="jsonFileInput" class="form-label fw-bold">Archivo JSON</label>
+                <InputFile id="jsonFileInput" OnChange="OnInputFileChange" accept=".json,application/json" class="form-control" />
+            </div>
+
+            <div class="mb-3">
+                <label for="delimiterSelect" class="form-label fw-bold">Delimitador CSV</label>
+                <select id="delimiterSelect" class="form-select" @bind="_delimiter">
+                    <option value=",">Coma ( , ) - Estándar internacional / Google Sheets</option>
+                    <option value=";">Punto y coma ( ; ) - Excel en español / Latinoamérica</option>
+                    <option value="tab">Tabulación ( \t ) - TSV / texto limpio</option>
+                </select>
+            </div>
+
+            @if (_file is not null)
+            {
+                <div class="alert alert-info">
+                    <strong>Archivo seleccionado:</strong> @_file.Name (@FormatSize(_file.Size))
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger" role="alert">@_error</div>
+            }
+
+            @if (_done)
+            {
+                <div class="alert alert-success" role="status">CSV generado y descargado correctamente.</div>
+            }
+
+            <button class="btn btn-success w-100 mt-2" @onclick="ConvertAndDownloadAsync" disabled="@(_file is null || _busy)">
+                @if (_busy)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Procesando...</span>
+                }
+                else
+                {
+                    <span>Convertir y descargar CSV</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private IBrowserFile? _file;
+    private string _delimiter = ",";
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+
+    private void OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _done = false;
+        _file = e.File;
+
+        if (!_file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            _error = "El archivo debe tener extensión .json.";
+            _file = null;
+        }
+        else if (_file.Size > ConverterApiClient.MaxFileBytes)
+        {
+            _error = $"El archivo supera el máximo permitido de {FormatSize(ConverterApiClient.MaxFileBytes)}.";
+            _file = null;
+        }
+    }
+
+    private async Task ConvertAndDownloadAsync()
+    {
+        if (_file is null) return;
+
+        _busy = true;
+        _done = false;
+        _error = null;
+
+        try
+        {
+            await using var stream = _file.OpenReadStream(ConverterApiClient.MaxFileBytes);
+            var result = await Api.ConvertAsync(stream, _file.Name, _delimiter);
+
+            if (!result.Success)
+            {
+                _error = result.Error;
+                return;
+            }
+
+            var outName = Path.GetFileNameWithoutExtension(_file.Name) + ".csv";
+            using var reference = new DotNetStreamReference(new MemoryStream(result.Csv!));
+            await JS.InvokeVoidAsync("downloadFileFromStream", outName, reference);
+            _done = true;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Ocurrió un error inesperado: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{Math.Max(1, bytes / 1024)} KB";
+}
